@@ -1,6 +1,6 @@
 import argparse
 from lanshare.config.settings import Config
-from lanshare.core.discovery import PeerDiscovery
+from lanshare.core.udp_discovery import UDPPeerDiscovery
 from lanshare.ui.session import InteractiveSession
 
 def main():
@@ -14,7 +14,7 @@ def main():
             parser.error("Username is required for 'create' command")
         
         config = Config()
-        discovery = PeerDiscovery(args.username, config)
+        discovery = UDPPeerDiscovery(args.username, config)
         session = InteractiveSession(discovery)
         session.start()
 

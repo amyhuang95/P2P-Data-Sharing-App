@@ -5,12 +5,12 @@ from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.completion import WordCompleter
 from prompt_toolkit.shortcuts import clear
 
-from ..core.discovery import PeerDiscovery
+from ..core.udp_discovery import UDPPeerDiscovery
 from .debug_view import DebugView
 from .user_list_view import UserListView
 
 class InteractiveSession:
-    def __init__(self, discovery: PeerDiscovery):
+    def __init__(self, discovery: UDPPeerDiscovery):
         self.discovery = discovery
         self.commands = {
             'ul': self._show_user_list,
