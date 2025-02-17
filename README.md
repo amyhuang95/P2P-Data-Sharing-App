@@ -1,6 +1,16 @@
 # LAN Sharing Service
 A local-area-network (LAN) sharing service that shares files and clipboards across different devices in local area network, essientially, it means transferring files directly between devices on the same network without going through the internet. 
 
+### CUJ
+---
+- *CUJ#1:* sub LAN with access code;
+- *CUJ#2:* peer discoveries (in LAN and sub-LAN);
+- *CUJ#3:* access level (secured mode, admin, visitor, ...);
+- *CUJ#4:* messages transmission & history (text only);
+- *CUJ#5:* file transmission (different format);
+- *CUJ#6:* streaming across LAN;
+- *CUJ#7:* backup and restore;
+
 ### Prerequisite
 ---
 First, make a new folder and clone the repo:
@@ -15,9 +25,10 @@ download all python dependencies:
 ```
 pip install -r requirements.txt
 ```
-* Notes: Make sure all the device are in the same LAN to discover your peers.
+**Notes: Make sure all the device are in the same LAN to discover your peers.**
 
 ### Create User
+---
 ```sh
 python create.py create --username evan-dayy
 ```
