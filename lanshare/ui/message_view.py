@@ -1,5 +1,5 @@
 from prompt_toolkit.application import Application
-from prompt_toolkit.layout.containers import Window, HSplit
+from prompt_toolkit.layout.containers import Window, HSplit, ScrollOffsets
 from prompt_toolkit.layout.controls import FormattedTextControl, BufferControl
 from prompt_toolkit.layout.layout import Layout
 from prompt_toolkit.key_binding import KeyBindings
@@ -22,6 +22,8 @@ class MessageView:
         self.messages: List[Message] = []
         self.message_buffer = Buffer()
         self.last_check = datetime.now()
+        self.last_message_count = 0
+        self.current_conversation_id = None
         
         # Setup components
         self._setup_keybindings()
@@ -83,21 +85,6 @@ class MessageView:
             
         return text
 
-    def _get_layout(self):
-        message_window = Window(
-            content=FormattedTextControl(self._format_messages),
-            wrap_lines=True
-        )
-
-        if self.recipient:
-            input_window = Window(
-                content=BufferControl(buffer=self.message_buffer),
-                height=1
-            )
-            return Layout(HSplit([message_window, input_window]))
-        else:
-            return Layout(message_window)
-
     def _send_message(self, content):
         if not content.strip():
             return
@@ -111,20 +98,11 @@ class MessageView:
             )
             if msg:
                 self.messages.append(msg)
+                # Force update display
+                if hasattr(self, 'app'):
+                    self.app.invalidate()
 
-    def _check_new_messages(self):
-        """Check for new messages and update display"""
-        while self.running:
-            if self.recipient:
-                # Get all messages with this peer
-                new_messages = self.discovery.list_messages(self.recipient)
-                # Add only messages we haven't seen
-                for msg in new_messages:
-                    if msg not in self.messages:
-                        self.messages.append(msg)
-            time.sleep(0.1)  # Check every 100ms
-
-    def format_conversation_list(self) -> List[Message]:
+    def format_conversation_list(self):
         """Format the list of conversations for display"""
         # Group messages by conversation
         conversations: Dict[str, List[Message]] = {}
@@ -148,9 +126,9 @@ class MessageView:
             other_party = last_msg.recipient if last_msg.sender == self.discovery.username else last_msg.sender
             
             text.extend([
-                ("class:info", f"ID: {conv_id[:5]} "),  # Show only first 5 characters
+                ("class:info", f"ID: {conv_id[:5]} "),
                 ("class:peer", f"with {other_party}"),
-                ("class:timestamp", f" (Last message: {last_msg.timestamp.strftime('%Y-%m-%d %H:%M:%S')})"),
+                ("class:timestamp", f" (Last: {last_msg.timestamp.strftime('%H:%M:%S')})"),
                 ("", "\n"),
                 ("class:info", f"Last message: "),
                 ("", f"{last_msg.content[:50]}{'...' if len(last_msg.content) > 50 else ''}\n"),
@@ -162,19 +140,14 @@ class MessageView:
     def show_conversation(self, peer: str, conversation_id: Optional[str] = None):
         """Show and interact with a conversation"""
         self.recipient = peer
-        # Use existing ID or generate new consistent one
         self.current_conversation_id = conversation_id or self.discovery._generate_conversation_id(
             self.discovery.username, peer)
         
         # Get existing messages for this conversation
         self.messages = self.discovery.get_conversation(self.current_conversation_id)
+        self.last_message_count = len(self.messages)
 
-        # Start message checking thread
-        check_thread = threading.Thread(target=self._check_new_messages)
-        check_thread.daemon = True
-        check_thread.start()
-
-        # Show messages
+        # Show messages UI
         self._show_messages()
 
     def show_message_list(self):
@@ -196,18 +169,86 @@ class MessageView:
         app.run()
         clear()
 
+    def _check_new_messages(self):
+        """Check for new messages and update display"""
+        while self.running:
+            if self.recipient and self.current_conversation_id:
+                # Get all messages for this conversation
+                new_messages = self.discovery.get_conversation(self.current_conversation_id)
+                if len(new_messages) > self.last_message_count:
+                    self.messages = new_messages
+                    self.last_message_count = len(new_messages)
+                    # Force refresh of the display
+                    if hasattr(self, 'app'):
+                        self.app.invalidate()
+            time.sleep(0.1)  # Check every 100ms
+
     def _show_messages(self):
-        app = Application(
-            layout=self._get_layout(),
+        """Display messages in the UI"""
+        # Create auto-scrolling message window
+        message_window = Window(
+            content=FormattedTextControl(
+                self._format_messages,
+                focusable=False  # Make message window not focusable
+            ),
+            wrap_lines=True,
+            always_hide_cursor=True,
+            scroll_offsets=ScrollOffsets(top=1, bottom=1),
+            allow_scroll_beyond_bottom=False
+        )
+
+        # Add input window if in conversation mode
+        if self.recipient:
+            input_window = Window(
+                content=BufferControl(
+                    buffer=self.message_buffer,
+                    focusable=True
+                ),
+                height=1,
+                dont_extend_height=True
+            )
+            layout = Layout(HSplit([
+                message_window,
+                input_window
+            ]))
+            # Ensure input window gets focus
+            layout.focus(input_window)
+        else:
+            layout = Layout(message_window)
+
+        # Create and configure the application
+        self.app = Application(
+            layout=layout,
             key_bindings=self.kb,
             full_screen=True,
             style=self.style,
-            mouse_support=True
+            mouse_support=True,
+            erase_when_done=True
         )
 
+        # Clear screen
         clear()
-        app.run()
-        clear()
+        
+        # Start message checking thread
+        check_thread = threading.Thread(target=self._check_new_messages)
+        check_thread.daemon = True
+        check_thread.start()
+        
+        # Start refresh thread
+        def refresh_screen():
+            while self.running:
+                self.app.invalidate()
+                time.sleep(0.1)
+
+        refresh_thread = threading.Thread(target=refresh_screen)
+        refresh_thread.daemon = True
+        refresh_thread.start()
+
+        try:
+            self.app.run()
+        finally:
+            self.running = False
+            clear()
 
 def send_new_message(discovery, recipient: str):
     """Start a direct message session with a recipient"""
