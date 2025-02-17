@@ -115,6 +115,16 @@ class UDPPeerDiscovery(PeerDiscovery):
         except Exception as e:
             self.debug_print(f"Message handling error: {e}")
 
+    def _generate_conversation_id(self, user1: str, user2: str) -> str:
+        """Generate a consistent conversation ID for two users"""
+        # Sort usernames to ensure same ID regardless of sender/recipient
+        sorted_users = sorted([user1, user2])
+        # Create a consistent hash using the sorted usernames
+        combined = f"{sorted_users[0]}:{sorted_users[1]}"
+        import hashlib
+        # Generate a short hash (first 5 characters)
+        return hashlib.md5(combined.encode()).hexdigest()[:5]
+
     def send_message(self, recipient: str, title: str, content: str, 
                     conversation_id: Optional[str] = None,
                     reply_to: Optional[str] = None) -> Optional[Message]:
@@ -124,6 +134,9 @@ class UDPPeerDiscovery(PeerDiscovery):
             return None
 
         try:
+            # Generate or use conversation ID
+            conv_id = conversation_id if conversation_id else self._generate_conversation_id(self.username, recipient)
+
             message = Message(
                 id=str(uuid.uuid4()),
                 sender=self.username,
@@ -131,7 +144,7 @@ class UDPPeerDiscovery(PeerDiscovery):
                 title=title,
                 content=content,
                 timestamp=datetime.now(),
-                conversation_id=conversation_id or str(uuid.uuid4()),
+                conversation_id=conv_id,
                 reply_to=reply_to
             )
 

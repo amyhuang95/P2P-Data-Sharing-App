@@ -148,7 +148,7 @@ class MessageView:
             other_party = last_msg.recipient if last_msg.sender == self.discovery.username else last_msg.sender
             
             text.extend([
-                ("class:info", f"ID: {conv_id[:8]}... "),
+                ("class:info", f"ID: {conv_id[:5]} "),  # Show only first 5 characters
                 ("class:peer", f"with {other_party}"),
                 ("class:timestamp", f" (Last message: {last_msg.timestamp.strftime('%Y-%m-%d %H:%M:%S')})"),
                 ("", "\n"),
@@ -162,13 +162,12 @@ class MessageView:
     def show_conversation(self, peer: str, conversation_id: Optional[str] = None):
         """Show and interact with a conversation"""
         self.recipient = peer
-        self.current_conversation_id = conversation_id or str(uuid.uuid4())
+        # Use existing ID or generate new consistent one
+        self.current_conversation_id = conversation_id or self.discovery._generate_conversation_id(
+            self.discovery.username, peer)
         
         # Get existing messages for this conversation
-        if conversation_id:
-            self.messages = self.discovery.get_conversation(conversation_id)
-        else:
-            self.messages = []
+        self.messages = self.discovery.get_conversation(self.current_conversation_id)
 
         # Start message checking thread
         check_thread = threading.Thread(target=self._check_new_messages)
