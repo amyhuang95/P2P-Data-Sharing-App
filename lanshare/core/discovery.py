@@ -24,3 +24,13 @@ class PeerDiscovery(ABC):
     def cleanup(self) -> None:
         """Clean up resources"""
         pass
+    
+    @abstractmethod
+    def start(self) -> None:
+        """Start the discovery service"""
+        pass
+
+    @abstractmethod
+    def stop(self) -> None:
+        """Stop the discovery service"""
+        pass

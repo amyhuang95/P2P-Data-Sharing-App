@@ -5,16 +5,19 @@ from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.completion import WordCompleter
 from prompt_toolkit.shortcuts import clear
 
-from ..core.udp_discovery import UDPPeerDiscovery
 from .debug_view import DebugView
 from .user_list_view import UserListView
+from .message_view import MessageView, send_new_message
 
 class InteractiveSession:
-    def __init__(self, discovery: UDPPeerDiscovery):
+    def __init__(self, discovery):
         self.discovery = discovery
         self.commands = {
             'ul': self._show_user_list,
             'debug': self._show_debug_view,
+            'msg': self._send_message,
+            'lm': self._list_messages,
+            'om': self._open_message,
             'help': self.show_help,
             'clear': self.clear_screen,
             'exit': self.exit_session,
@@ -50,10 +53,47 @@ class InteractiveSession:
         view = DebugView(self.discovery)
         view.show()
 
+    def _send_message(self, *args):
+        """Handle the msg command"""
+        if not args:
+            print("Usage: msg <username>")
+            return
+
+        recipient = args[0]
+        peers = self.discovery.list_peers()
+        if recipient not in peers:
+            print(f"Error: User '{recipient}' not found or offline")
+            return
+
+        send_new_message(self.discovery, recipient)
+
+    def _list_messages(self, *args):
+        """Handle the lm command"""
+        view = MessageView(self.discovery)
+        view.show_message_list()
+
+    def _open_message(self, *args):
+        """Handle the om command"""
+        if not args:
+            print("Usage: om <conversation_id>")
+            return
+
+        conversation_id = args[0]
+        messages = self.discovery.get_conversation(conversation_id)
+        if not messages:
+            print(f"No conversation found with ID: {conversation_id}")
+            return
+
+        view = MessageView(self.discovery)
+        view.show_conversation(conversation_id)
+
     def show_help(self, *args):
         """Show help message"""
         print("\nAvailable commands:")
         print("  ul     - List online users")
+        print("  msg    - Send a message (msg <username>)")
+        print("  lm     - List all messages")
+        print("  om     - Open a message conversation (om <conversation_id>)")
         print("  debug  - Toggle debug mode")
         print("  clear  - Clear screen")
         print("  help   - Show this help message")
@@ -73,7 +113,6 @@ class InteractiveSession:
         # Get local IP address
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
-            # doesn't need to be reachable, just to get local IP
             s.connect(('10.255.255.255', 1))
             local_ip = s.getsockname()[0]
         except Exception:

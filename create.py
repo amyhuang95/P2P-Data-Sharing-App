@@ -15,6 +15,7 @@ def main():
         
         config = Config()
         discovery = UDPPeerDiscovery(args.username, config)
+        discovery.start()
         session = InteractiveSession(discovery)
         session.start()
 

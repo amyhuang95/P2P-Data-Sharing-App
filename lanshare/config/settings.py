@@ -7,7 +7,7 @@ class Config:
         self.debug_messages = []
         self.config_file = Path.home() / '.lanshare.conf'
         self.max_debug_messages = 100
-        self.broadcast_port = 12345
+        self.port = 12345  # Single port for all UDP communication
         self.peer_timeout = 2.0  # seconds
         self.broadcast_interval = 0.1  # seconds
         self.load_config()
@@ -35,3 +35,4 @@ class Config:
         self.debug_messages.append((timestamp, message))
         if len(self.debug_messages) > self.max_debug_messages:
             self.debug_messages.pop(0)
+            
