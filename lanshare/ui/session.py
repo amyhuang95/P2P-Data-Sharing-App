@@ -84,8 +84,15 @@ class InteractiveSession:
             print(f"No conversation found with ID: {conversation_id}")
             return
 
-        view = MessageView(self.discovery)
-        view.show_conversation(conversation_id)
+        # Get the other participant from the conversation
+        last_message = max(messages, key=lambda m: m.timestamp)
+        other_party = (last_message.recipient 
+                      if last_message.sender == self.discovery.username 
+                      else last_message.sender)
+
+        # Open the conversation view
+        view = MessageView(self.discovery, other_party)
+        view.show_conversation(other_party, conversation_id)
 
     def show_help(self, *args):
         """Show help message"""

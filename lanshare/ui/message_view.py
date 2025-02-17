@@ -7,7 +7,9 @@ from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.styles import Style
 from prompt_toolkit.shortcuts import clear
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict
+import threading
+import time
 import uuid
 
 from ..core.types import Message
@@ -19,6 +21,7 @@ class MessageView:
         self.running = True
         self.messages: List[Message] = []
         self.message_buffer = Buffer()
+        self.last_check = datetime.now()
         
         # Setup components
         self._setup_keybindings()
@@ -41,10 +44,11 @@ class MessageView:
 
     def _setup_styles(self):
         self.style = Style.from_dict({
-            'username': '#00aa00 bold',  # Green for current user
-            'peer': '#0000ff bold',      # Blue for other users
-            'timestamp': '#888888',
-            'prompt': '#ff0000',
+            'username': '#00aa00 bold',    # Green for current user
+            'peer': '#0000ff bold',        # Blue for other users
+            'timestamp': '#888888',        # Gray for timestamp
+            'prompt': '#ff0000',           # Red for prompt
+            'info': '#888888 italic',      # Gray italic for info
         })
 
     def _format_messages(self):
@@ -101,24 +105,97 @@ class MessageView:
         if self.recipient:
             msg = self.discovery.send_message(
                 recipient=self.recipient,
-                title="Direct Message",  # Simple title for all messages
+                title="Direct Message",
                 content=content,
-                conversation_id=str(uuid.uuid4())
+                conversation_id=self.current_conversation_id
             )
             if msg:
                 self.messages.append(msg)
 
-    def show_conversation(self, peer: str):
-        """Show and interact with a conversation with a specific peer"""
+    def _check_new_messages(self):
+        """Check for new messages and update display"""
+        while self.running:
+            if self.recipient:
+                # Get all messages with this peer
+                new_messages = self.discovery.list_messages(self.recipient)
+                # Add only messages we haven't seen
+                for msg in new_messages:
+                    if msg not in self.messages:
+                        self.messages.append(msg)
+            time.sleep(0.1)  # Check every 100ms
+
+    def format_conversation_list(self) -> List[Message]:
+        """Format the list of conversations for display"""
+        # Group messages by conversation
+        conversations: Dict[str, List[Message]] = {}
+        for msg in self.discovery.list_messages():
+            conv_id = msg.conversation_id
+            if conv_id not in conversations:
+                conversations[conv_id] = []
+            conversations[conv_id].append(msg)
+
+        text = [
+            ("class:prompt", "Conversations:\n"),
+            ("", "─" * 60 + "\n")
+        ]
+
+        for conv_id, msgs in conversations.items():
+            # Sort messages by timestamp
+            msgs.sort(key=lambda m: m.timestamp)
+            last_msg = msgs[-1]
+            
+            # Get the other participant
+            other_party = last_msg.recipient if last_msg.sender == self.discovery.username else last_msg.sender
+            
+            text.extend([
+                ("class:info", f"ID: {conv_id[:8]}... "),
+                ("class:peer", f"with {other_party}"),
+                ("class:timestamp", f" (Last message: {last_msg.timestamp.strftime('%Y-%m-%d %H:%M:%S')})"),
+                ("", "\n"),
+                ("class:info", f"Last message: "),
+                ("", f"{last_msg.content[:50]}{'...' if len(last_msg.content) > 50 else ''}\n"),
+                ("", "─" * 60 + "\n")
+            ])
+
+        return text
+
+    def show_conversation(self, peer: str, conversation_id: Optional[str] = None):
+        """Show and interact with a conversation"""
         self.recipient = peer
-        self.messages = self.discovery.list_messages(peer)
+        self.current_conversation_id = conversation_id or str(uuid.uuid4())
+        
+        # Get existing messages for this conversation
+        if conversation_id:
+            self.messages = self.discovery.get_conversation(conversation_id)
+        else:
+            self.messages = []
+
+        # Start message checking thread
+        check_thread = threading.Thread(target=self._check_new_messages)
+        check_thread.daemon = True
+        check_thread.start()
+
+        # Show messages
         self._show_messages()
 
     def show_message_list(self):
-        """Show list of all messages"""
-        self.recipient = None
-        self.messages = self.discovery.list_messages()
-        self._show_messages()
+        """Show list of all conversations"""
+        app = Application(
+            layout=Layout(
+                Window(
+                    content=FormattedTextControl(self.format_conversation_list),
+                    wrap_lines=True
+                )
+            ),
+            key_bindings=self.kb,
+            full_screen=True,
+            style=self.style,
+            mouse_support=True
+        )
+
+        clear()
+        app.run()
+        clear()
 
     def _show_messages(self):
         app = Application(
@@ -129,7 +206,6 @@ class MessageView:
             mouse_support=True
         )
 
-        # Clear screen and show UI
         clear()
         app.run()
         clear()
