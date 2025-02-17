@@ -27,7 +27,7 @@ pip install -r requirements.txt
 ```
 **Notes: Make sure all the device are in the same LAN to discover your peers.**
 
-### Create User
+### Create a User with `username`
 ---
 ```sh
 python create.py create --username evan-dayy
