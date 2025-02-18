@@ -110,6 +110,7 @@ class UDPPeerDiscovery(PeerDiscovery):
         try:
             msg = Message.from_dict(packet['data'])
             if msg.recipient == self.username:
+                msg.timestamp = datetime.now() # update to received time
                 self.messages.append(msg)
                 self.debug_print(f"Received message from {msg.sender}: {msg.title}")
         except Exception as e:
